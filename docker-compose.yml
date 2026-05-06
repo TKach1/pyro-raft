@@ -1,0 +1,42 @@
+services:
+  nameserver:
+    build: .
+    command: python -m src.nameserver
+    ports:
+      - "9090:9090"
+    networks:
+      - raft-net
+
+  candidate:
+    build: .
+    command: python -m src.candidate
+    environment:
+      - NAMESERVER_HOST=nameserver
+    depends_on:
+      - nameserver
+    deploy:
+      replicas: 3
+    volumes:
+      - candidate-data:/data
+    networks:
+      - raft-net
+
+  client:
+    build: .
+    command: python -m src.client
+    environment:
+      - NAMESERVER_HOST=nameserver
+    depends_on:
+      - nameserver
+      - candidate
+    deploy:
+      replicas: 2
+    networks:
+      - raft-net
+
+networks:
+  raft-net:
+    driver: bridge
+
+volumes:
+  candidate-data:
