@@ -33,12 +33,22 @@ class CandidateNode:
         """Handle AppendEntries RPC (heartbeat + replication)."""
         # TODO: implement
         pass
+    
+    def save_data(self, data: str) -> None:
+        """Save data to local storage (only leader accepts)."""
+        with open(self.data_file, "w") as f:
+            f.write(data)
 
     def submit(self, client_id: str, data: str) -> dict:
         """Receive data from client (only leader accepts)."""
         # TODO: implement - reject if not leader, redirect to leader
-        pass
-
+        if self.state != "leader":
+            return {"success": False, "error": "Not the leader", "leader_uri": self.leader_id}
+        # Save data and replicate to followers
+        self.append_entries(term=self.current_term, leader_id=self.node_id, entries=[data])
+        self.save_data(data)
+        self.commit_index += 1
+        return {"success": True, "message": f"Data received by node {self.node_id} from client {client_id}", "data": data}
 
 def main():
     """Start candidate node."""
