@@ -2,7 +2,7 @@ import uuid
 
 import Pyro5.api
 
-from src.config import NAMESERVER_HOST, NAMESERVER_PORT
+from config import NAMESERVER_HOST, NAMESERVER_PORT
 
 
 class ClientNode:
@@ -16,12 +16,16 @@ class ClientNode:
 
     def send(self, data: str) -> dict:
         """Send string data to leader."""
-        # TODO: implement - find leader, submit data, handle redirect
         ns = Pyro5.api.locate_ns(host=NAMESERVER_HOST, port=NAMESERVER_PORT)
-        self.leader_uri = ns.lookup("leader")
-        leader = Pyro5.api.Proxy(self.leader_uri)
         try:
+            self.leader_uri = ns.lookup("leader")
+            leader = Pyro5.api.Proxy(self.leader_uri)
             response = leader.submit(client_id=self.client_id, data=data)
+            if not response.get("success", False) and "leader_uri" in response:
+                # Redirect to the actual leader
+                self.leader_uri = response["leader_uri"]
+                leader = Pyro5.api.Proxy(self.leader_uri)
+                response = leader.submit(client_id=self.client_id, data=data)
             print(f"Response from leader: {response}")
             return {"success": True, "message": response}
         except Pyro5.errors.PyroError as e:
