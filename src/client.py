@@ -18,7 +18,7 @@ class ClientNode:
         """Send string data to leader."""
         # TODO: implement - find leader, submit data, handle redirect
         ns = Pyro5.api.locate_ns(host=NAMESERVER_HOST, port=NAMESERVER_PORT)
-        self.leader_uri = ns.lookup("leader")
+        self.leader_uri = ns.yplookup("leader")
         leader = Pyro5.api.Proxy(self.leader_uri)
         try:
             response = leader.submit(client_id=self.client_id, data=data)
