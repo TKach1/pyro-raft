@@ -41,6 +41,7 @@ class CandidateNode:
         }
         self.next_index = {nid: 1 for nid in self.other_nodes}
         self.match_index = {nid: 0 for nid in self.other_nodes}
+        self._last_error_log = {}  # nid -> timestamp, rate-limit error logs
 
         os.makedirs(DATA_DIR, exist_ok=True)
         self.load_state()
@@ -55,6 +56,7 @@ class CandidateNode:
                 self.voted_for = state.get("voted_for", None)
                 self.log = state.get("log", [])
                 self.commit_index = state.get("commit_index", 0)
+                self.last_applied = state.get("last_applied", 0)
 
     def save_state(self):
         state = {
@@ -62,6 +64,7 @@ class CandidateNode:
             "voted_for": self.voted_for,
             "log": self.log,
             "commit_index": self.commit_index,
+            "last_applied": self.last_applied,
         }
         with open(self.state_file, "w") as f:
             json.dump(state, f)
@@ -142,7 +145,7 @@ class CandidateNode:
             if should_become_leader:
                 self._become_leader()
         except Exception as e:
-            print(f"[{self.node_id}] Vote request to {nid} failed: {e}")
+            self._log_error_throttled(nid, f"Vote request to {nid} failed: {e}")
 
     def _become_leader(self):
         with self.lock:
@@ -225,7 +228,15 @@ class CandidateNode:
                 else:
                     self.next_index[nid] = max(1, self.next_index[nid] - 1)
         except Exception as e:
-            print(f"[{self.node_id}] AppendEntries to {nid} failed: {e}")
+            self._log_error_throttled(nid, f"AppendEntries to {nid} failed: {e}")
+
+    def _log_error_throttled(self, nid, msg, interval=5):
+        """Log error at most once per interval seconds per node."""
+        now = time.time()
+        last = self._last_error_log.get(nid, 0)
+        if now - last >= interval:
+            self._last_error_log[nid] = now
+            print(f"[{self.node_id}] {msg}")
 
     # --- RPC handlers ---
 
@@ -294,11 +305,20 @@ class CandidateNode:
                 self.commit_index = min(leader_commit, len(self.log))
 
             self.save_state()
+            self._apply_committed_entries()
 
         self._reset_election_timer()
         return {"term": self.current_term, "success": True}
 
     # --- Commit ---
+
+    def _apply_committed_entries(self):
+        """Apply log entries between last_applied and commit_index to data store."""
+        while self.last_applied < self.commit_index:
+            self.last_applied += 1
+            entry = self.log[self.last_applied - 1]
+            self.save_data(self.node_id, entry["command"])
+            print(f"[{self.node_id}] Applied entry {self.last_applied}: {entry['command']}")
 
     def _update_commit_index(self):
         """Must be called with self.lock held."""
@@ -332,7 +352,7 @@ class CandidateNode:
         deadline = time.time() + 5
         while time.time() < deadline:
             if self.commit_index >= entry_index:
-                self.save_data(client_id, data)
+                self._apply_committed_entries()
                 return {"success": True, "message": f"Committed by leader {self.node_id}", "data": data}
             time.sleep(0.05)
 
