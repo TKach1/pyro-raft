@@ -10,3 +10,5 @@ COPY src/ ./src/
 RUN mkdir -p /data
 
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/src
+ENV DATA_DIR=/data

@@ -1,36 +1,68 @@
 services:
   nameserver:
     build: .
-    command: python -m src.nameserver
+    command: python src/nameserver.py
     ports:
       - "9090:9090"
     networks:
       - raft-net
 
-  candidate:
+  node1:
     build: .
-    command: python -m src.candidate
+    command: python src/candidate.py node1
     environment:
       - NAMESERVER_HOST=nameserver
+      - NODE1_HOST=node1
+      - NODE2_HOST=node2
+      - NODE3_HOST=node3
     depends_on:
       - nameserver
-    deploy:
-      replicas: 3
     volumes:
-      - candidate-data:/data
+      - node1-data:/data
+    networks:
+      - raft-net
+
+  node2:
+    build: .
+    command: python src/candidate.py node2
+    environment:
+      - NAMESERVER_HOST=nameserver
+      - NODE1_HOST=node1
+      - NODE2_HOST=node2
+      - NODE3_HOST=node3
+    depends_on:
+      - nameserver
+    volumes:
+      - node2-data:/data
+    networks:
+      - raft-net
+
+  node3:
+    build: .
+    command: python src/candidate.py node3
+    environment:
+      - NAMESERVER_HOST=nameserver
+      - NODE1_HOST=node1
+      - NODE2_HOST=node2
+      - NODE3_HOST=node3
+    depends_on:
+      - nameserver
+    volumes:
+      - node3-data:/data
     networks:
       - raft-net
 
   client:
     build: .
-    command: python -m src.client
+    command: python src/client.py
     environment:
       - NAMESERVER_HOST=nameserver
+      - AUTO_SEND_INTERVAL=5
     depends_on:
       - nameserver
-      - candidate
-    deploy:
-      replicas: 2
+      - node1
+      - node2
+      - node3
     networks:
       - raft-net
 
@@ -39,4 +71,6 @@ networks:
     driver: bridge
 
 volumes:
-  candidate-data:
+  node1-data:
+  node2-data:
+  node3-data:

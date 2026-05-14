@@ -26,25 +26,26 @@ if __name__ == "__main__":
     ns_proc = start_nameserver()
     time.sleep(2)  # Wait for nameserver to start
 
-    # Start 4 nodes
+    # Start nodes
     node_procs = []
     for node_id in NODES:
         proc = start_node(node_id)
         node_procs.append(proc)
-        time.sleep(1)  # Stagger starts
+        time.sleep(0.5)
+
+    # Wait for election to complete
+    print("Cluster started. Waiting for election...")
+    time.sleep(3)
 
     # Start client
     client_proc = start_client()
 
     try:
-        # Wait for processes
-        ns_proc.wait()
-        for proc in node_procs:
-            proc.wait()
         client_proc.wait()
     except KeyboardInterrupt:
-        print("Shutting down...")
-        ns_proc.terminate()
+        print("\nShutting down...")
+    finally:
+        client_proc.terminate()
         for proc in node_procs:
             proc.terminate()
-        client_proc.terminate()
+        ns_proc.terminate()
